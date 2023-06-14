@@ -1,6 +1,6 @@
 # Servetify for Node.js
 
-Servetify is an open-source project licensed under [*BRYDGET CLOUD OPEN SOURCE LICENESE v1*](.//LICENSE)
+Servetify is an open-source project licensed under [*MIT LICENSE*](.//LICENSE)
 Feel free to open an issue on GitHub or create a pull request for suggestions or problems.
 
 Servetify provides easy-to-use interfaces and developer-friendly functionalities to setup a web server, interact with databases like SQL Server and MySQL.
