@@ -1,7 +1,7 @@
 /*
     Servetify v1.0 by Brydget Cloud Development Team
     https://github.com/brycloud/Servetify-Node
-    Licensed under BRYDGET CLOUD OPEN SOURCE LICENESE v1
+    Licensed under MIT LICENSE
 
     © 2023 Brydget, Inc.
     All Rights Reserved.
@@ -283,7 +283,7 @@ class Servetify {
         if (!Interval || !Requests || !Deny || typeof Interval !== "string" || typeof Requests !== "number" || typeof Deny !== "string" || TimeDetector(Interval) === 0) {
             throw new Error('Invalid DoS configuration');
         }
-        this.server.use(new RateLimit({
+        this.server.use(RateLimit({
             windowMs: TimeDetector(Interval),
             max: Requests,
             message: Deny
