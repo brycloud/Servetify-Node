@@ -1,3 +1,5 @@
+<a href="https://github.com/brycloud/Servetify-Node"><img src="https://raw.githubusercontent.com/brycloud/Servetify-Node/master/GitHubUrl.png" style="height:70;width:auto;"></a>
+
 # Servetify for Node.js
 
 Servetify is an open-source project licensed under [*MIT LICENSE*](.//LICENSE)
@@ -144,6 +146,8 @@ You can sete the rate limit for your application, this prevents partially DoS At
 Example of code:
 
 ```js
+// First, we import Servetify
+import Servetify from "servetify";
 const handler = new Servetify(2020);
 
 // Handle a request at a route
@@ -155,6 +159,72 @@ handler.DoS({
     Requests: 125, // 125 Max Requests in 1h
     Deny: "You've reached our request limit per hour."
 });
+// That's it!
+
+// Wait for the server to start listening
+await handler.start();
+// Server is listening
+console.log("Example app succesfully listening at NET Port ::"+handler.PORT+" on your local network");
+```
+
+**NEW: Serving static files**
+
+This functionality is based on [`express.static()`](https://expressjs.com/en/starter/static-files.html) method, and allows you to serve static conntent on your server. You might want to check their documenntation to know how this works.
+
+Example of code:
+
+```js
+// First, we import Servetify
+import Servetify from "servetify";
+const handler = new Servetify(2020);
+
+// ...
+handler.static("my_dir");
+// ...
+```
+
+**NEW: Blocking specific request methods**
+
+This functionality allows you to block specific HTTP request methods. This allows to prevent unwanted changes at your applications. Is as easy as using the `.block()` method.
+
+Example of code:
+
+```js
+// First, we import Servetify
+import Servetify from "servetify";
+const handler = new Servetify(2020);
+
+// ...
+handler.block("PUT");
+handler.block("DELETE");
+// ...
+```
+
+**NOTE:** This creates a middleware for this specific methods at your server, do not create handlers for this methods, because this may generate contradictions and errors.
+
+**Receiving POST Data, Cookies and files**
+
+Servetify is configured to receive POST data without adding more lines to your code, you may only need to use `req.body`. Also, you can access to the cookies sent from the client with the `req.cookies` property. Finally, you can access too to the files sennt from the client with `req.files`.
+
+**NOTE:** The files sent from the client are stored in computer RAM memory, leak of memory is a common issue, we recommend to use a cloud hosting provider for large-scale applications
+
+Example of code:
+
+```js
+const handler = new Servetify(2020);
+
+// Handle a request at a route
+// ...
+
+// Setup DoS Protection
+handler.handle("GET /", function(req) {
+    const cookies = req.cookies;
+    const postBody = req.body;
+    const files = req.files;
+
+    // Do whatever here with the received data
+    // Send a response
+})
 // That's it!
 
 // Wait for the server to start listening
@@ -264,7 +334,7 @@ const Database = Handler.MySQL({
 const query = await Database.query("SELECT * FROM my_table WHERE condition = ?", ["my_value"], true);
 // With the "true" param, the protection will be disabled.
 if (!query.success) {
-    // Validation failed or malicious SQL Code detected, manage the error
+    // Query malformed or invalid synntax
     throw new Error("Validation failed")
 }
 console.log(query.details); // Get the query result
@@ -309,6 +379,44 @@ if (!query.success) {
 console.log(query.details); // Get the query result
 ```
 
+**Interacting with PostgreSQL Databases**
+
+To interact with PostgreSQL databases, the proccess of doing queries is the same, Servetify ensures the same security algorithm for SQL Server connections, the proccess of doing queries is totally the same, but the connection proccess variates.
+As SQL Server does not use the same authentication methods as MySQL and requires a connection string, the proccess is the different, however Servetify has made the proccess most similar possible as MySQL Connections.
+
+Example of code:
+```js
+// First, we import Servetify
+import Servetify from "servetify";
+
+/// ...
+// We create a handler for Servetify
+const Handler = new Servetify(2020);
+// You can setup your server here
+// ...
+// Setup connection to the database
+const Database = Handler.PostgreSQL({
+    user:"root",
+    password:"",
+    // If you dont specify the port, the connection will be redirected to port 5432 (Default PGSQL Port)
+    // port: 5432,
+    host:"localhost",
+    database:"my_database",
+    // The "database" parameter is not required, but you may need to check your hosting provider limitations to not violate their terms and conditions
+});
+
+// The Database constant is an object that contains the connection and two methods: query() aad close()
+const query = await Database.query("SELECT * FROM my_table WHERE condition = ?", ["my_value"]);
+// With the "true" param, the protection will be disabled.
+if (!query.success) {
+    // Validation failed or malicious SQL Code detected, manage the error
+    throw new Error("Validation failed")
+}
+console.log(query.details); // Get the query result
+```
+
+_The functionality is the at all SQL Database Providers, you can disable the maicious SQL Detector with the 3rd parameter._
+
 **Closing connections**
 
 Is important to close the connection to the database after you have finished using the database, this is a good practice to prevent server overloading and excesive loading times. Its simpler as a line of code
@@ -319,9 +427,276 @@ Database.close();
 
 With this line of code, the connection will be closed and the server will stop using SQL and will disconnect from the SQL Database
 
+## New: SessionManager
+
+SessionManager is a secure session storage for your web applications based in NoSQL Databases to ensure scalability on your applications. The way we perform this is identifying the user and its session by its IP address.
+
+SessionManager works with SQLite3, MongoDB and a built-in database stored at the machine memory. However, is important to note that every database works different ways, **a built-in database in memory can cause memory leaks, because data is stored at computer or VM RAM memory. In this cases, if the stored data objects are too big, the server can even get down or crash.** However, **memory databases are known because of their efficience and speed at data recovering**. 
+If you prefer to use SQLite3 is a good initiative, **SQLite3 is known because of its speed and its lower file weight on .db files, however on massive data objects, the .db file may be too big and can cause a resource missing issue.**
+Finally, if you would rather to use MongoDB, its a good option too. **MongoDB is a NoSQL Database known because of its speed and scalability**, however is **important to configure your production environment properly to prevent server crashes**
+
+*The decision of using any of these databases for SessionManager depends on your system limitations, we highly recommend to analyze carefully your requieremnts and system resources to prevent errors*
+
+SessionManager uses cryptography to hash securely sessions information, so you will need to provide a secret key to hash information given to the server.
+**NOTE:** The secret key must be of 32 bytes long, if it is longer or shorter, the system will automatically fill or short the key.
+
+**1. Example of code for MongoDB:**
+
+```js
+// First, we import Servetify
+import Servetify from "servetify";
+
+/// ...
+// We create a handler for Servetify
+const Handler = new Servetify(2020);
+// Setup connection to the database
+const SessionManager = Handler.Authenticator({
+    // The property is not lower-upper sensitive.
+    connectionType:"MongoDB",
+    // Connection details for MongoDB
+    connection:{
+        // Connection URL
+        uri:"mongodb://...",
+        // Be careful: this database needs to be created first
+        database:"my_database"
+    },
+    // The configuration for the sessions
+    sessionConfig:{
+        // Allows to limit only one session per IP
+        onlyOne:true,
+        // Time before the session expires (in seconds)
+        ttl:1000
+        // In this case, the session will expire after 1000 seconds
+    }
+    // Considerations: this code generates a collection named "sessions" at your database.
+}, "my_secret_key");
+// Here "my_secret_key" is going to be the key used to hash values
+// You can setup your server here
+// ...
+Handler.handle("GET /", async function(req) {
+    // Get the session
+    const session = await SessionManager.Fetch(req.ip);
+    // When you generate a session, an unique ID is assigned to the session
+    // Sessions can be found by the user IP
+    /*
+        Return value example:
+        {
+            success:true,
+            data: null,
+            error: "No session found.",
+        }
+        {
+            success:true,
+            data: {
+                "key1":"value1"
+            },
+            error: null,
+        }
+    */
+    if (!session.data) {
+        await SessionManager.New({
+            "userId":1234,
+        }, req.ip);
+        /*
+            Return structure:
+            {
+                id: "...",
+                success:true,
+                error:null
+            }
+
+            or
+
+            {
+                id: "...",
+                success:false,
+                error: "This IP owns a session already.",
+            }
+        */
+        return new Response("You don't have an open session. We've generated one for you")
+    }
+    // ...
+})
+```
+
+**2. Example of code for SQLite3:**
+
+```js
+// First, we import Servetify
+import Servetify from "servetify";
+
+/// ...
+// We create a handler for Servetify
+const Handler = new Servetify(2020);
+// Setup connection to the database
+const SessionManager = Handler.Authenticator({
+    // The property is not lower-upper sensitive.
+    connectionType:"SQLite",
+    // Connection details for SQLite
+    connection:{
+        // If the string does not includes the ".db" extension at the end, it will be added automatically
+        database:"my_database"
+    },
+    // The configuration for the sessions
+    sessionConfig:{
+        // Allows to limit only one session per IP
+        onlyOne:true,
+        // Time before the session expires (in seconds)
+        ttl:1000
+        // In this case, the session will expire after 1000 seconds
+    }
+}, "my_secret_key");
+// Here "my_secret_key" is going to be the key used to hash values
+// You can setup your server here
+// ...
+Handler.handle("GET /", async function(req) {
+    // Get the session
+    const session = await SessionManager.Fetch(req.ip);
+    // When you generate a session, an unique ID is assigned to the session
+    // Sessions can be found by the user IP
+    /*
+        Return value example:
+        {
+            success:true,
+            data: null,
+            error: "No session found.",
+        }
+        {
+            success:true,
+            data: {
+                "key1":"value1"
+            },
+            error: null,
+        }
+    */
+    if (!session.data) {
+        await SessionManager.New({
+            "userId":1234,
+        }, req.ip);
+        /*
+            Return structure:
+            {
+                id: "...",
+                success:true,
+                error:null
+            }
+
+            or
+
+            {
+                id: "...",
+                success:false,
+                error: "This IP owns a session already.",
+            }
+        */
+        return new Response("You don't have an open session. We've generated one for you")
+    }
+    // ...
+})
+```
+
+**2. Example of code for Cache Database:**
+
+```js
+// First, we import Servetify
+import Servetify from "servetify";
+
+/// ...
+// We create a handler for Servetify
+const Handler = new Servetify(2020);
+// Setup connection to the database
+const SessionManager = Handler.Authenticator({
+    // The property is not lower-upper sensitive.
+    connectionType:"Memory",
+    // No connection credentials required
+    connection:{},
+    // The configuration for the sessions
+    sessionConfig:{
+        // Allows to limit only one session per IP
+        onlyOne:true,
+        // Time before the session expires (in seconds)
+        ttl:1000
+        // In this case, the session will expire after 1000 seconds
+    }
+}, "my_secret_key");
+// Here "my_secret_key" is going to be the key used to hash values
+// You can setup your server here
+// ...
+Handler.handle("GET /", async function(req) {
+    // Get the session
+    const session = await SessionManager.Fetch(req.ip);
+    // When you generate a session, an unique ID is assigned to the session
+    // Sessions can be found by the user IP
+    /*
+        Return value example:
+        {
+            success:true,
+            data: null,
+            error: "No session found.",
+        }
+        {
+            success:true,
+            data: {
+                "key1":"value1"
+            },
+            error: null,
+        }
+    */
+    if (!session.data) {
+        await SessionManager.New({
+            "userId":1234,
+        }, req.ip);
+        /*
+            Return structure:
+            {
+                id: "...",
+                success:true,
+                error:null
+            }
+
+            or
+
+            {
+                id: "...",
+                success:false,
+                error: "This IP owns a session already.",
+            }
+        */
+        return new Response("You don't have an open session. We've generated one for you")
+    }
+    // ...
+})
+```
+
+## New: Crypto
+
+Crypto is an easy form to encrypt and decrypt strings using Node.js and Servetify. It uses the `crypto` module that is a module integrated with Node.js and is highly trusted.
+
+**NOTE:** The secret key must be of 32 bytes long, if it is longer or shorter, the system will automatically fill or short the key.
+
+Example of code:
+
+```js
+// First, we import Servetify
+import Servetify from "servetify";
+// ...
+const Handler = new Servetify(2020);
+/// Define secret key
+const myKey = "my_secret_key";
+// Create a new crypto handler
+const CryptoHandler = Handler.Crypto(myKey);
+// Encode your first string
+const encodedStringn = CryptoHandler.hash("Hello world");
+const decodedStringn = CryptoHandler.decrypt(encodedStringn);
+
+console.log(encodedStringn, decodedStringn);
+// The algorithm generates a different string any time is called.
+```
+
+
 ## Contributing
 
 We love to hear your ideas!
-Feel free to open an issue on GitHub or create a pull request
+Feel free to open an issue or create a pull request at GitHub or NPM
 We will be really grateful for your feedback and on heearing your suggestions
 Thank you.
