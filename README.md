@@ -1,4 +1,4 @@
-<a href="https://github.com/brycloud/Servetify-Node"><img src="https://raw.githubusercontent.com/brycloud/Servetify-Node/master/GitHubUrl.png" style="height:70px;width:auto;"></a>
+<a  href="https://github.com/brycloud/Servetify-Node"><img  src="https://raw.githubusercontent.com/brycloud/Servetify-Node/master/GitHubUrl.png"  style="height:70px;width:270px;object-fit:contain"></a>
 
 # Servetify for Node.js
 
