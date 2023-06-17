@@ -54,7 +54,7 @@ handler.handle("GET /")
 
 The `handle` method receives the route as a string, it may have the syntax of an HTTP Request, we defined the method and then the route: `GET /`, that means: listen to GET requests at route `/`.
 
-The `handle` method returns a function, the function must be called to register the response for an specific route, the function will be executed every time the same route is fetched. Also, the function needs to return a `Response` object, the `Response` object will be interpreted and will be served to the client.
+The `handle` method returns a function, the function must be called to register the response for a specific route, the function will be executed every time the same route is fetched. Also the function needs to return a `Response` object, the `Response` object will be interpreted and will be served to the client.
 
 **NOTE:** Servetify uses [Express.js](https://expressjs.com/) to setup your server, so you can take advantage of all functionalities offered by Express.js. You may want to check their [Documentation](https://expressjs.com/en/starter/installing.html) to know all of the functionalities that you can take advantage of.
 
@@ -108,7 +108,7 @@ await handler.start();
 console.log("Example app succesfully listening at NET Port ::"+handler.PORT+" on your local network");
 ```
 
-You can also use middlewares designed Express.js with Servetify, this is useful to do many tasks. To do this, you can access the base server or use the `Middleware()` method provided by Servetify.
+You can also use middlewares designed Express.js with Servetify, this is useful to do many tasks. To do this, you can access the base server or use the `Middleware()` method provided by Servetify or just use the base server.
 
 Examples of code:
 
@@ -216,8 +216,8 @@ const handler = new Servetify(2020);
 // Handle a request at a route
 // ...
 
-// Setup DoS Protection
-handler.handle("GET /", function(req) {
+// Receive a GET request
+handler.handle("GET /")(function(req) {
     const cookies = req.cookies;
     const postBody = req.body;
     const files = req.files;
@@ -252,7 +252,7 @@ We use three security layers to interact with your databases securely. Summary:
 
     Servetify search for `<script>` tags on the query, if found, the function will not query to the database and will return an error or warning.
 
-4. **Characte Encoding**
+4. **Character Encoding**
 
     After passing all other checks, Servetify encodes the string with a trusted module of HTML character escaping. Is important to note that this check by itself is not totally secure, Servetify has implemented all other security checks to ensure malicious code injection
 
@@ -686,10 +686,10 @@ const myKey = "my_secret_key";
 // Create a new crypto handler
 const CryptoHandler = Handler.Crypto(myKey);
 // Encode your first string
-const encodedStringn = CryptoHandler.hash("Hello world");
-const decodedStringn = CryptoHandler.decrypt(encodedStringn);
+const encodedString = CryptoHandler.hash("Hello world");
+const decodedString = CryptoHandler.decrypt(encodedString);
 
-console.log(encodedStringn, decodedStringn);
+console.log(encodedString, decodedString);
 // The algorithm generates a different string any time is called.
 ```
 
