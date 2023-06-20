@@ -304,7 +304,7 @@ class Servetify {
                 if (Object.hasOwnProperty.call(llocated, route)) {
                     const el = llocated[route];
                     if (this.server[el.method]) {
-                        this.server[el.method](el.uri, filesHandler.none(), async (req, res) => {
+                        this.server[el.method](el.uri, filesHandler.any(), async (req, res) => {
                             const resp = el.resolve(req);
                             if (resp instanceof Response) {
                                 const text = await resp.text();
