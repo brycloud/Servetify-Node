@@ -35,7 +35,7 @@ const handler = new Servetify(2020);
 handler.handle("GET /")(req => {
     // You can aaccess the request object through the "req" variable
     // Ex.: req.files
-    return new Response("Hello world");
+    return Servetify.Response("Hello world");
 });
 
 // Wait for the server to start listening
@@ -96,9 +96,9 @@ handler.handle("GET /")(req => {
     // Check if params are not listed
     if (!age || !name) {
         // Some of the params are not listed, you can manage the error here
-        return new Response("Hey! You did not provided the query parameters, please check the URL and try again.");
+        return Servetify.Response("Hey! You did not provided the query parameters, please check the URL and try again.");
     }
-    return new Response("Hello, "+name+", are you "+age+"?");
+    return Servetify.Response("Hello, "+name+", are you "+age+"?");
     // Example resut: Hello, John Doe, are you 21?
 });
 
@@ -167,7 +167,7 @@ await handler.start();
 console.log("Example app succesfully listening at NET Port ::"+handler.PORT+" on your local network");
 ```
 
-**NEW: Serving static files**
+**Serving static files**
 
 This functionality is based on [`express.static()`](https://expressjs.com/en/starter/static-files.html) method, and allows you to serve static conntent on your server. You might want to check their documenntation to know how this works.
 
@@ -183,7 +183,7 @@ handler.static("my_dir");
 // ...
 ```
 
-**NEW: Blocking specific request methods**
+**Blocking specific request methods**
 
 This functionality allows you to block specific HTTP request methods. This allows to prevent unwanted changes at your applications. Is as easy as using the `.block()` method.
 
@@ -427,7 +427,7 @@ Database.close();
 
 With this line of code, the connection will be closed and the server will stop using SQL and will disconnect from the SQL Database
 
-## New: SessionManager
+## SessionManager
 
 SessionManager is a secure session storage for your web applications based in NoSQL Databases to ensure scalability on your applications. The way we perform this is identifying the user and its session by its IP address.
 
@@ -513,7 +513,7 @@ Handler.handle("GET /", async function(req) {
                 error: "This IP owns a session already.",
             }
         */
-        return new Response("You don't have an open session. We've generated one for you")
+        return Servetify.Response("You don't have an open session. We've generated one for you")
     }
     // ...
 })
@@ -589,7 +589,7 @@ Handler.handle("GET /", async function(req) {
                 error: "This IP owns a session already.",
             }
         */
-        return new Response("You don't have an open session. We've generated one for you")
+        return Servetify.Response("You don't have an open session. We've generated one for you")
     }
     // ...
 })
@@ -662,13 +662,102 @@ Handler.handle("GET /", async function(req) {
                 error: "This IP owns a session already.",
             }
         */
-        return new Response("You don't have an open session. We've generated one for you")
+        return Servetify.Response("You don't have an open session. We've generated one for you")
     }
     // ...
 })
 ```
 
-## New: Crypto
+## In-Memory Session Manager v2
+
+This functionality uses an UUID and an in-memory storage to store the sessions, but the UUID generated for the Session ID  needs to be saved as a cookie at the client.
+
+Example:
+
+```js
+// First, we import Servetify
+import Servetify from "../index.js";
+// Creating a new handler
+const handler = new Servetify(2020);
+// Create a new session manager
+const SessionsHandler = await handler.InMemorySessionManager({ttl:150});
+
+// Receive any request at any route
+handler.handle("ALL *")(req => {
+    // You can aaccess the request object through the "req" variable
+    // Fetch a session
+    const session = SessionsHandler.Fetch(req.cookies.session);
+    const { userId } = session; // 123 | undefined (When TTL expires)
+    if (!userId) {
+        // Generate a new session and save it to the client
+        req.SetClientCookie("session", SessionsHandler.New({
+            userId:123
+        }));
+    }
+    // Fetch here the information from your DB
+    console.log(userId); // 123
+    return Servetify.Response("Hello world");
+});
+
+// Wait for the server to start listening
+await handler.start();
+// Server is listening
+console.log("Example app succesfully listening at NET Port ::"+handler.PORT+" on your local network");
+```
+
+The method `SessionHandler.New()` returns a string that is an UUID. The UUID works as a Session ID, then the code saves the Session ID as a cookie at the Client Browser.
+
+When the function `handler.InMemorySessionManager()` is called, the `ttl` propery specifies the time (in seconds) to live before the session is destroyed. In the example above, when a new session is registered, it will be destroyed after 150 seconds.
+
+
+## Setting cookies
+
+To save cookies, Servetify offers the `req.SetClientCookie` function to save cookies at the client browser. You can also specify the cookies at the `Response` object. Both methofds do the same, developers may choose the functionality that is more legible for their needs.
+
+**Definition of the function**
+
+```ts
+function SetClientCookie(key: string, value: string, ttl: number) : void
+```
+
+Examples:
+
+```js
+// First, we import Servetify
+import Servetify from "../index.js";
+// Creating a new handler
+const handler = new Servetify(2020);
+
+// Receive any request at any route
+handler.handle("ALL *")(req => {
+    // You can aaccess the request object through the "req" variable
+    // Saves a new cookie
+    req.SetClientCookie("a cookie", "a value");
+    return Servetify.Response("Hello world");
+});
+```
+
+You can also specify the cookies at the response, but you may need to use the `Servetify.Response` method to generate a compatible response object. With a traditional `Response` object, the cookies may not be proccessed.
+
+```js
+// First, we import Servetify
+import Servetify from "../index.js";
+// Creating a new handler
+const handler = new Servetify(2020);
+
+// Receive any request at any route
+handler.handle("ALL *")(req => {
+    // You can aaccess the request object through the "req" variable
+    // Saves a new cookie
+    return Servetify.Response("Hello world", {
+        cookies:{
+            "a cookie":"a value"
+        }
+    });
+});
+```
+
+## Crypto
 
 Crypto is an easy form to encrypt and decrypt strings using Node.js and Servetify. It uses the `crypto` module that is a module integrated with Node.js and is highly trusted.
 
