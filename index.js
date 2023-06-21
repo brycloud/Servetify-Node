@@ -22,6 +22,8 @@ import sqlite3 from 'sqlite3'
 import crypto from 'crypto'
 import NodeCache from 'node-cache'
 import PostgreDb from 'pg'
+import ExpressBrute from 'express-brute';
+import {v4 as uuidv4} from 'uuid'
 const memoryStorage = multer.memoryStorage()
 const filesHandler = multer({storage:memoryStorage})
 
@@ -33,14 +35,31 @@ const llocated = {}; // Variable to store routes
  * @return {Servetify} - Server Driver
  */
 class Servetify {
-    poolConnections = []; // Array to store database connection pools
     server = express(); // Express server instance
 
-    constructor(PORT) {
+    constructor(PORT, useMemoryStorage = false) {
         this.PORT = PORT;
         this.server.use(express.json());
         this.server.use(cookieParser());
         this.server.use(express.urlencoded({ extended: false }));
+        // This function is designed to prevent brute force attacks
+        const BruteForceMemoryStorage = useMemoryStorage ? new ExpressBrute.MemoryStore() : null;
+        const BruteForceFunction = useMemoryStorage ? new ExpressBrute(BruteForceMemoryStorage) : null;
+        if (useMemoryStorage) {
+            this.server.use(BruteForceFunction.prevent());
+        }
+        this.server.use(function(req, res, next) {
+            /**
+             * Sets a cookie for the client.
+             * @param {string} key - The key for the cookie.
+             * @param {string} value - The value for the cookie.
+             * @param {number} ttl - The time to live for the cookie (in seconds).
+             */
+            req.SetClientCookie = function(key, value) {
+                res.cookie(key, value);
+            }
+            next();
+        })
     }
     /**
      * Connects to a database that uses SQL Server
@@ -306,20 +325,26 @@ class Servetify {
                     if (this.server[el.method]) {
                         this.server[el.method](el.uri, filesHandler.any(), async (req, res) => {
                             const resp = el.resolve(req);
-                            if (resp instanceof Response) {
+                            //if (resp instanceof Response) {
                                 const text = await resp.text();
+                                for (const headerKey in (resp.cookies || {})) {
+                                    if (Object.hasOwnProperty.call(resp.cookies, headerKey)) {
+                                        const headerValue = resp.cookies[headerKey];
+                                        res.cookie(headerKey, headerValue);
+                                    }
+                                }
                                 for (const headerKey in resp.headers) {
                                     if (Object.hasOwnProperty.call(resp.headers, headerKey)) {
                                         const headerValue = resp.headers[header];
                                         res.header(headerKey, headerValue);
                                     }
                                 }
-                                if (!resp.headers["Content-Type"]) {
+                                if (resp.headers && !resp.headers["Content-Type"]) {
                                     res.header("Content-Type", "text/plain");
                                 }
                                 res.status(resp.status || 200);
                                 res.send(text);
-                            }
+                            //}
                         });
                     }
                 }
@@ -376,6 +401,17 @@ class Servetify {
         return this;
     }
     block(method) {
+        if (Array.isArray(method)) {
+            method.forEach(method => {
+                this.server.use(function(req, res, next) {
+                    if (req.method.toUpperCase() === method.toUpperCase()) {
+                        res.status(405).end();
+                    }
+                    next();
+                });
+            });
+            return this;
+        }
         if (typeof method !== "string") {
             throw new Error('Invalid block configuration');
         }
@@ -442,6 +478,12 @@ class Servetify {
             }
             const { connectionType } = o;
             if (!connectionType || typeof connectionType !== "string") {
+                throw new Error('Invalid database configuration');
+            }
+            if (typeof o.sessionConfig.ttl !== "number") {
+                throw new Error('Invalid database configuration');
+            }
+            if (o.sessionConfig.ttl <= 0) {
                 throw new Error('Invalid database configuration');
             }
             if (connectionType.toLowerCase() === "mongodb") {
@@ -787,6 +829,79 @@ class Servetify {
             ///next();
         }
     //}
+    /**
+     * Creates a session manager that stores sessions in memory with a given time-to-live (TTL).
+     * @param {Object} config - The configuration object with the TTL in seconds.
+     * @param {number} config.ttl - The time-to-live (TTL) for the sessions in seconds.
+     * @return {Promise<{New: function, Close: function, Fetch : function, Delete : function}>} Connection object based on the connectionType.
+    */
+    async InMemorySessionManager(config) {
+        if (Object.prototype.toString.call(config) !== '[object Object]') {
+            throw new Error('Invalid database configuration');
+        }
+        const {ttl} = config;
+        if (typeof ttl !== 'number') {
+            throw new Error('Invalid database configuration');
+        }
+        if (ttl <= 0) {
+            throw new Error('Invalid database configuration');
+        }
+        const Sessions = await this.MemoryStorage();
+        return {
+            /**
+             * Synchronously creates a new session with the given information.
+             * @param {Object} info - The information to be stored in the session.
+             * @return {string} The unique session ID.
+            */
+            New(info) {
+                const sessionId = uuidv4();
+                Sessions.set(sessionId, JSON.stringify(info));
+                setTimeout(() => {
+                    Sessions.del(sessionId);    
+                }, ttl*1000);
+                return sessionId;
+            },
+            /**
+             * Deletes a session with the given ID.
+             *
+             * @param {number} id - The ID of the session to delete.
+             * @return {Promise<void>} A promise that resolves when the session is deleted.
+            */
+            Delete(id) {
+                Sessions.del(id);
+            },
+            /**
+             * Parses the JSON object stored in the session with the specified ID.
+             *
+             * @param {string} id - the ID of the session to retrieve
+             * @return {object} the parsed JSON object, or an empty object if the session is not found
+            */
+            Fetch(id) {
+                return JSON.parse(Sessions.get(id) || "{}");
+            }
+        }
+    }
+    /**
+     * Creates a response new response object compatible with Serveetify
+     * @param {string} text - The text to be returned by the async text method.
+     * @param {object} object - An object containing additional properties to be added to the response object.
+     * @return {object} An object with an async text method and any additional properties specified in the object argument.
+    */
+    static Response(text, object) {
+        return {
+            /**
+             * Asynchronously retrieves the text.
+             * @return {Promise<string>} The text.
+            */
+            async text() {
+                if (Object.prototype.toString.call(text) === '[object Object]') {
+                    return JSON.stringify(text);
+                }
+                return text;
+            },
+            ...object
+        }
+    }
 };
 
 /*
