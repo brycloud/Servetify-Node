@@ -1,5 +1,5 @@
 /*
-    Servetify v1.1 by Brydget Cloud Development Team
+    Servetify v1.2 by Brydget Cloud Development Team
     https://github.com/brycloud/Servetify-Node
     Licensed under MIT LICENSE
 
@@ -18,11 +18,9 @@ import RateLimit from 'express-rate-limit'
 import cookieParser from 'cookie-parser'
 import CryptoAlg from './util/Crypto.js'
 import mongodb from 'mongodb'
-import sqlite3 from 'sqlite3'
 import crypto from 'crypto'
 import NodeCache from 'node-cache'
 import PostgreDb from 'pg'
-import ExpressBrute from 'express-brute';
 import {v4 as uuidv4} from 'uuid'
 const memoryStorage = multer.memoryStorage()
 const filesHandler = multer({storage:memoryStorage})
@@ -32,22 +30,44 @@ const llocated = {}; // Variable to store routes
  * Servetify is a library for Node.js that provides a simple and easy way to handle HTTP requests.
  * @constructor
  * @param {number} PORT - The port number for the server
+ * @param {boolean} useMemoryStorage - Use memory storage to store requests
+ * @param {number} IntervalToClearReceivedRequestsFromIps - Interval to clear received requests from IPs
  * @return {Servetify} - Server Driver
  */
 class Servetify {
     server = express(); // Express server instance
 
-    constructor(PORT, useMemoryStorage = false) {
+    constructor(PORT, useMemoryStorage = true, IntervalToClearReceivedRequestsFromIps=1000) {
         this.PORT = PORT;
         this.server.use(express.json());
         this.server.use(cookieParser());
         this.server.use(express.urlencoded({ extended: false }));
         // This function is designed to prevent brute force attacks
-        const BruteForceMemoryStorage = useMemoryStorage ? new ExpressBrute.MemoryStore() : null;
-        const BruteForceFunction = useMemoryStorage ? new ExpressBrute(BruteForceMemoryStorage) : null;
-        if (useMemoryStorage) {
-            this.server.use(BruteForceFunction.prevent());
-        }
+        // Update: handwritten from scratch due to dependencies issues
+        //(async () => {
+            if (useMemoryStorage) {
+                const BruteForceStorage = this.MemoryStorage();
+                this.server.use(function(req, res, next) {
+                    const reqIp = req.ip;
+                    const crypted = crypto.createHash("sha256").update(reqIp).digest("hex");
+                    const isAtDb = BruteForceStorage.get(crypted);
+                    if (isAtDb) {
+                        BruteForceStorage.set(crypted, parseInt(isAtDb)+1);
+                        setTimeout(() => {
+                            BruteForceStorage.del(crypted);
+                        }, IntervalToClearReceivedRequestsFromIps);
+                    } else {
+                        BruteForceStorage.set(crypted, 1);
+                    }
+                    if (parseInt(isAtDb)+1 > 200) {
+                        res.statusCode = 429;
+                        res.send("Too many attempts");
+                    } else {
+                        next();
+                    }
+                });
+            }
+        //})();
         this.server.use(function(req, res, next) {
             /**
              * Sets a cookie for the client.
@@ -324,7 +344,7 @@ class Servetify {
                     const el = llocated[route];
                     if (this.server[el.method]) {
                         this.server[el.method](el.uri, filesHandler.any(), async (req, res) => {
-                            const resp = el.resolve(req);
+                            const resp = await el.resolve(req);
                             //if (resp instanceof Response) {
                                 const text = await resp.text();
                                 for (const headerKey in (resp.cookies || {})) {
@@ -379,10 +399,10 @@ class Servetify {
      * @see https://github.com/brycloud/Servetify-Node
      */
     handle(route) {
-        return (resolve => {
-            if (!route) return resolve();
-            if (typeof route !== 'string') return resolve();
-            if (route.split(' ').length > 2 || route.split(' ').length < 1) return resolve();
+        return (async resolve => {
+            if (!route) return await resolve();
+            if (typeof route !== 'string') return await resolve();
+            if (route.split(' ').length > 2 || route.split(' ').length < 1) return await resolve();
             const [method, uri] = route.split(' ');
             llocated[route] = {
                 uri,
@@ -450,7 +470,7 @@ class Servetify {
      * Be careful beacause of memory leaks.
      * @return {Promise<NodeCache>} A Promise that resolves with a new instance of NodeCache.
      */
-    async MemoryStorage() {
+    MemoryStorage() {
         const client = new NodeCache();
         return client;
     }
@@ -584,134 +604,8 @@ class Servetify {
                         }
                     }
                 }
-            } else if (connectionType.toLowerCase() === "sqlite") {
-                if (!o.connection.database.match(/\.db$/)) {
-                    o.connection.database += ".db";
-                }
-                const connection = new (sqlite3.verbose()).Database(o.connection.database);
-                connection.run("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, data TEXT)");
-                return {
-                    /**
-                     * Asynchronously creates a new session ID for a given IP address and stores it in a database.
-                     * @param {Object} info - an object containing database configuration details
-                     * @return {Promise<{id: string, success: boolean, error: any}>} An object containing the crypted IP as the id, a boolean
-                     * @throws {Error} if the info parameter is not a valid object
-                     */
-                    New(info, ip) {
-                        return new Promise((resolve, reject) => {
-                            if (Object.prototype.toString.call(info) !== '[object Object]') {
-                                throw new Error('Invalid database configuration');
-                            }
-                            const cryptedIp = crypto.createHash("sha256").update(ip).digest("hex");
-                            if (Object.prototype.toString.call(info) !== '[object Object]') {
-                                throw new Error('Invalid database configuration');
-                            }
-                            if (o.sessionConfig.onlyOne) {
-                                connection.all("SELECT * FROM sessions WHERE id = ?", [cryptedIp], (err, rows) => {
-                                    if (err) return reject(err);
-                                    if (rows.length > 0) {
-                                        return {
-                                            id: cryptedIp,
-                                            success:false,
-                                            error: "This IP owns a session already.",
-                                        }
-                                    }
-                                    connection.run("INSERT INTO sessions (id, data) VALUES (?, ?)", [cryptedIp, CryptoAlg.encrypt(JSON.stringify(info), hashKey)], function(err) {
-                                        if (err) return reject(err);
-                                        setTimeout(() => {
-                                            connection.run("DELETE FROM sessions WHERE id = ?", [cryptedIp], function() {});
-                                        }, o.sessionConfig.ttl*1000);
-                                        resolve({
-                                            id: cryptedIp,
-                                            success:true,
-                                            error: null
-                                        });
-                                    });
-                                });
-                            } else {
-                                connection.run("INSERT INTO sessions (id, data) VALUES (?, ?)", [cryptedIp, CryptoAlg.encrypt(JSON.stringify(info), hashKey)], function(err) {
-                                    if (err) return reject(err);
-                                    setTimeout(() => {
-                                        connection.run("DELETE FROM sessions WHERE id = ?", [cryptedIp], function() {});
-                                    }, o.sessionConfig.ttl*1000);
-                                    resolve({
-                                        id: cryptedIp,
-                                        success:true,
-                                        error: null
-                                    });
-                                });
-                            }
-                        });
-                    },
-                    /**
-                     * Deletes a session from the 'sessions' table.
-                     *
-                     * @param {string} sessionId - The ID of the session to be deleted.
-                     * @return {Promise} A Promise that returns an object with properties:
-                     *         - success (boolean): true if deletion is successful.
-                     *         - error (object): null if no error, otherwise an object with error details.
-                    */
-                    async Delete(ip) {
-                        const cryptedIp = crypto.createHash("sha256").update(ip).digest("hex");
-                        return new Promise((resolve, reject) => {
-                            if (Object.prototype.toString.call(sessionId) !== '[object String]') {
-                                throw new Error('Invalid database configuration');
-                            }
-                            connection.all("DELETE FROM sessions WHERE id = ?", [cryptedIp], function(err) {
-                                if (err) return reject(err);
-                                resolve({
-                                    success:true,
-                                    error: null
-                                });
-                            });
-                        });
-                    },
-                    /**
-                     * Asynchronously fetches a session by ID from the sessions database.
-                     *
-                     * @param {string} sessionId - The ID of the session to fetch.
-                     * @return {Promise<object>} A Promise that resolves to an object with the following structure:
-                     * {
-                     *   success: boolean, // Whether or not the session was found
-                     *   error: string, // An error message if the session was not found
-                     *   data: object // The session data if the session was found
-                     * }
-                     * If the function fails to fetch the session, the Promise is rejected with an error.
-                     * @throws {Error} If the sessionId parameter is not a string.
-                    */
-                    async Fetch(ip) {
-                        const cryptedIp = crypto.createHash("sha256").update(ip).digest("hex");
-                        return new Promise((resolve, reject) => {
-                            if (Object.prototype.toString.call(sessionId) !== '[object String]') {
-                                throw new Error('Invalid database configuration');
-                            }
-                            connection.all("SELECT * FROM sessions WHERE id = ?", [cryptedIp], (err, rows) => {
-                                if (err) return reject(err);
-                                if (rows.length === 0) {
-                                    return {
-                                        success:true,
-                                        data: null,
-                                        error: "No session found.",
-                                    }
-                                }
-                                resolve({
-                                    success:true,
-                                    error: null,
-                                    data: JSON.parse(CryptoAlg.decrypt(rows[0].data, hashKey))
-                                });
-                            });
-                        });
-                    },
-                    /**
-                     * Closes the connection to the database.
-                     * @return {void}
-                     */
-                    Close() {
-                        connection.close();
-                    }
-                }
             } else if (connectionType.toLowerCase() === "memory") {
-                const connection = await this.MemoryStorage();
+                const connection = this.MemoryStorage();
                 return {
                     /**
                      * Asynchronously creates a new session ID for a given IP address and stores it in a database.
@@ -846,7 +740,7 @@ class Servetify {
         if (ttl <= 0) {
             throw new Error('Invalid database configuration');
         }
-        const Sessions = await this.MemoryStorage();
+        const Sessions = this.MemoryStorage();
         return {
             /**
              * Synchronously creates a new session with the given information.
@@ -900,6 +794,67 @@ class Servetify {
                 return text;
             },
             ...object
+        }
+    }
+    /**
+     * Creates a protected resource with given route, api key, waited header, and allowCors value.
+     * @param {string} route - The route to create a protected resource for.
+     * @param {string} apiKey - The API key to use for authentication.
+     * @param {string} [WaitedHeader=ApiKey] - The waited header to check for the correct API key.
+     * @param {boolean} [allowCors=true] - Whether or not to allow cross-origin resource sharing.
+     * @return {Functionn} A promise that resolves when the protected resource is created.
+     */
+    ProtectedResource(route, apiKey, WaitedHeader="ApiKey") {
+        return (async resolve => {
+            if (!route) return await resolve();
+            if (typeof route !== 'string') return await resolve();
+            if (route.split(' ').length > 2 || route.split(' ').length < 1) return await resolve();
+            const [method, uri] = route.split(' ');
+            llocated[route] = {
+                uri,
+                method: method.toLowerCase(),
+                resolve:function(req, res, next) {
+                    if ((Object.entries(req.headers || {}).filter(x => x[0].toLowerCase() === WaitedHeader.toLowerCase())[0] || [])[1] === apiKey) {
+                        return [resolve(req), (next || (() => {}))()][0];
+                    } else {
+                        return Servetify.Response("Unauthotized", {
+                            status:401
+                        });
+                    }
+                    next();
+                },
+            };
+        });
+    }
+    /**
+     * Configures CORS for the server based on the origin
+     * @param {string | string[]} origin - The origin or list of origins allowed to access the server.
+     * @throws {Error} Invalid CORS configuration if the origin is not a string when an array is passed.
+     */
+    CORS(origin) {
+        if (Array.isArray(origin)) {
+            if (typeof origin !== 'string') {
+                throw new Error('Invalid CORS configuration');
+            }
+            this.server.use((req, res, next) => {
+                res.header("Access-Control-Allow-Origin", origin);
+                res.header("Access-Control-Allow-Headers", "*");
+                res.header("Access-Control-Allow-Methods", "*");
+                res.header("Access-Control-Allow-Credentials", "true");
+                return [(next || (() => {}))()][2];
+            });
+            return this;
+        } else if (typeof origin === 'string') {
+            this.server.use((req, res, next) => {
+                res.header("Access-Control-Allow-Origin", origin);
+                res.header("Access-Control-Allow-Headers", "*");
+                res.header("Access-Control-Allow-Methods", "*");
+                res.header("Access-Control-Allow-Credentials", "true");
+                return [(next || (() => {}))()][2];
+            });
+            return this;
+        } else {
+            throw new Error('Invalid CORS configuration');
         }
     }
 };

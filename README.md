@@ -1,4 +1,40 @@
-<a  href="https://github.com/brycloud/Servetify-Node"><img  src="https://raw.githubusercontent.com/brycloud/Servetify-Node/master/GitHubUrl.png"  style="height:70px;width:320px;object-fit:contain"></a>
+![GitHub](https://img.shields.io/badge/Github-Servetify--Node-any?logo=https%3A%2F%2Fcdn-icons-png.flaticon.com%2F512%2F25%2F25231.png&logoColor=white&link=https%3A%2F%2Fgithub.com%2Fbrycloud%2FServetify-Node) ![NPM](https://img.shields.io/badge/npm-servetify%401.2.2-white?labelColor=orange&link=https%3A%2F%2Fwww.npmjs.com%2Fpackage%2Fservetify%3FactiveTab%3Dreadme)
+
+## Table of contents
+
+* [Introduction](#servetify-for-node.js)
+    - [LICENSE]((.//LICENSE))
+- [Quick Start (Web Server)](#quick-start-web-server)
+    - [Install](#install)
+    - [New handler](#new-handler)
+    - [Sending status codes to the client](#sending-status-codes-to-the-client)
+    - [CORS](#cors)
+    - [Middlewares](#middlewares)
+    - [Protecting routes](#protecting-routes)
+    - [Application Security](#application-security)
+    - [Serving static files](#serving-static-files)
+    - [Blocking specific request methods](#blocking-specific-request-methods)
+    - [Receiving POST Data, Cookies and files](#receiving-post-data-cookies-and-files)
+    - [Setting cookies](#setting-cookies)
+    - [async/await at handlers](#asyncawait-at-handlers)
+- [Interact with a SQL Database](#interact-with-a-sql-database)
+    - [Verification Steps](#verification-steps)
+    - [Query Results](#query-results)
+        - [Explanation of the errors](#explanation-of-the-errors)
+    - [MySQL](#mysql)
+        - [Example disabling SQL Injection Protection Algorithm](#example-disabling-sql-injection-protection-algorithm)
+    - [SqlServer](#interacting-with-sql-server-databases)
+    - [PostgreDB](#interacting-with-postgredb)
+    - [Closing connections](#closing-connections)
+- [SessionManager](#sessionmanager)
+    - [Examples](#sessionmanager)
+        - [MongoDB](#example-of-code-for-mongodb)
+        - [Cache DB](#example-of-code-for-cache-database)
+    - [Memory Session Manager](#in-memory-session-manager-v2)
+- [Crypto](#crypto)
+- [Changelog](./CHANGELOG.md)
+- [Contributing](#contributing)
+
 
 # Servetify for Node.js
 
@@ -8,9 +44,11 @@ Feel free to open an issue on GitHub or create a pull request for suggestions or
 Servetify provides easy-to-use interfaces and developer-friendly functionalities to setup a web server, interact with databases like SQL Server and MySQL.
 We're working on algorithms to prevent SQL Code Injection, for now, we've implemented an algorithm that partially prevents this. Follow the best practices with parametrized queries and preventing Cross-Site-Scripting. We use RegExp to validate XSS Attacks and common attacks like deleting data without authorization.
 
-# Quick-Start (Web Server)
+# Quick Start (Web Server)
 
-1. To start using Servetify as a web server software, you may need to install it first
+### Install
+
+To start using Servetify as a web server software, you may need to install it first
 
 ```bash
 npm i servetify
@@ -22,14 +60,16 @@ or
 yarn add servetify
 ```
 
-2. Once installed, you can start using Servetify. Here is an example code to an example web server
+### New Handler
+
+Once installed, you can start using Servetify. Here is an example code to an example web server
 
 ```js
 // First, we import Servetify
 import Servetify from "servetify";
 // We create a handler for a new web server
 // The constructor param will be the server port
-const handler = new Servetify(2020);
+const handler = new Servetify(2020, true, 1000);
 
 // Handle a request at a route
 handler.handle("GET /")(req => {
@@ -46,6 +86,21 @@ console.log("Example app succesfully listening at NET Port ::"+handler.PORT+" on
 
 **NOTE:** Servetify is developed with ES6 Modules System, so Servetify is needed to import as a module
 
+**Addition:** On Servetify 1.2.2, the brute force algorithm was modified, using a from-scratch code due to vulnerabilities found on an existing module. All servers will have a built-in brute force prevention algorithm. The clear inverval can be modified whenn a constructor is invoked.
+
+Example:
+
+```js
+// First, we import Servetify
+import Servetify from "servetify";
+// We create a handler for a new web server
+// The constructor param will be the server port
+const handler = new Servetify(2020, true, 1000);
+```
+
+* The `true` param specifies that the storage used for registring requests may  be alocated at a RAM DB. When a request is received, the user is identified by its IP and when 200 requests from the same IP are received on the specified interval, the request will be denied.
+* The `1000` param specifies the interval, when a request is denied, the denied IP will be still be denied for 1000ms (1s) on this case
+
 In the example below, we deployed a web server at the port ::2020, then we configured the handler to listen GET requests at route `/`. Exactly here:
 
 ```js
@@ -55,6 +110,71 @@ handler.handle("GET /")
 The `handle` method receives the route as a string, it may have the syntax of an HTTP Request, we defined the method and then the route: `GET /`, that means: listen to GET requests at route `/`.
 
 The `handle` method returns a function, the function must be called to register the response for a specific route, the function will be executed every time the same route is fetched. Also the function needs to return a `Response` object, the `Response` object will be interpreted and will be served to the client.
+
+### Sending status codes to the client
+
+To send status code at the client request, the `Response` object may contain the `status` property.
+
+Example:
+
+```js
+// First, we import Servetify
+import Servetify from "servetify";
+// We create a handler for a new web server
+// The constructor param will be the server port
+const handler = new Servetify(2020);
+
+// Handle a request at a route
+handler.handle("GET /")(req => {
+    // You can aaccess the request object through the "req" variable
+    // Ex.: req.files
+    return Servetify.Response("Hello world", {
+        status:200
+    });
+    // Sendin status 200 "OK"
+});
+
+// Wait for the server to start listening
+await handler.start();
+// Server is listening
+console.log("Example app succesfully listening at NET Port ::"+handler.PORT+" on your local network");
+```
+
+### CORS
+
+On Servetify 1.2.2, the method `CORS` was added to allow CORS requests. You can use the built-in `CORS` method instead of using middelwares
+
+Examples:
+
+```js
+// First, we import Servetify
+import Servetify from "servetify";
+// We create a handler for a new web server
+// The constructor param will be the server port
+const handler = new Servetify(2020);
+handler.CORS([
+    "mydomain.com",
+    "myanotherdomain.com"
+]);
+handler.CORS("*");
+
+// Handle a request at a route
+handler.handle("GET /")(req => {
+    // You can aaccess the request object through the "req" variable
+    // Ex.: req.files
+    return Servetify.Response("Hello world", {
+        status:200
+    });
+    // Sendin status 200 "OK"
+});
+
+// Wait for the server to start listening
+await handler.start();
+// Server is listening
+console.log("Example app succesfully listening at NET Port ::"+handler.PORT+" on your local network");
+```
+
+### Middlewares
 
 **NOTE:** Servetify uses [Express.js](https://expressjs.com/) to setup your server, so you can take advantage of all functionalities offered by Express.js. You may want to check their [Documentation](https://expressjs.com/en/starter/installing.html) to know all of the functionalities that you can take advantage of.
 
@@ -140,7 +260,39 @@ baseServer.Middleware(function(req, res) {
 
 **NOTE:** Servetify has self-implemented DoS Attacks and brute force attacks mitigators, however is important to note that these algorithims can fail in massive attacks, for a complete security structure, you can use Servetify integrated security system combinated with a security system provided by cloud companies like [CloudFlare](https://cloudflare.com/)
 
-**Application Security**
+### Protecting routes
+
+The method `ProtectedResource()` was added on v1.2.2, its functionality is to not serve content without an specific key sent by the client at the request headers. Example of use:
+
+```js
+// First, we import Servetify
+import Servetify from "../index.js";
+// Creating a new handler
+const handler = new Servetify(2020, true, 1000);
+
+// Receive any request at any route
+handler.ProtectedResource("ALL *", "HelloWorld", "Brydget-API-Key", true)(async req => {
+    return await (() => {
+        // Send the response
+        return  Servetify.Response("Hello world");
+    })();
+});
+
+// Wait for the server to start listening
+await handler.start();
+// Server is listening
+console.log("Example app succesfully listening at NET Port ::"+handler.PORT+" on your local network");
+```
+
+On the example below:
+
+* `ALL *` is the route, it works the same as the `handle()` method
+* `"HelloWorld"` is the key that unlocks the access to this route, we highly recommend to save the key on an environment variable.
+* `"Brydget-Api-Key"` is the header to check that might have the key to unlock
+
+> If the validation process is failed, the response will be a 401 HTTP Status Code, and `Unauthorized` response body.
+
+### Application Security
 
 You can sete the rate limit for your application, this prevents partially DoS Attacks, however take care of the above recomendation
 Example of code:
@@ -167,7 +319,7 @@ await handler.start();
 console.log("Example app succesfully listening at NET Port ::"+handler.PORT+" on your local network");
 ```
 
-**Serving static files**
+### Serving static files
 
 This functionality is based on [`express.static()`](https://expressjs.com/en/starter/static-files.html) method, and allows you to serve static conntent on your server. You might want to check their documenntation to know how this works.
 
@@ -183,7 +335,7 @@ handler.static("my_dir");
 // ...
 ```
 
-**Blocking specific request methods**
+### Blocking specific request methods
 
 This functionality allows you to block specific HTTP request methods. This allows to prevent unwanted changes at your applications. Is as easy as using the `.block()` method.
 
@@ -202,7 +354,21 @@ handler.block("DELETE");
 
 **NOTE:** This creates a middleware for this specific methods at your server, do not create handlers for this methods, because this may generate contradictions and errors.
 
-**Receiving POST Data, Cookies and files**
+**Addition:** You can also block two methods calling the same methos, specifying the parameter as an array.
+
+Example:
+
+```js
+// First, we import Servetify
+import Servetify from "servetify";
+const handler = new Servetify(2020);
+
+// ...
+handler.block(["PUT", "DELETE"]);
+// ...
+```
+
+### Receiving POST Data, Cookies and files
 
 Servetify is configured to receive POST data without adding more lines to your code, you may only need to use `req.body`. Also, you can access to the cookies sent from the client with the `req.cookies` property. Finally, you can access too to the files sennt from the client with `req.files`.
 
@@ -233,10 +399,106 @@ await handler.start();
 console.log("Example app succesfully listening at NET Port ::"+handler.PORT+" on your local network");
 ```
 
+### Setting cookies
+
+To save cookies, Servetify offers the `req.SetClientCookie` function to save cookies at the client browser. You can also specify the cookies at the `Response` object. Both methofds do the same, developers may choose the functionality that is more legible for their needs.
+
+**Definition of the function**
+
+```ts
+function SetClientCookie(key: string, value: string, ttl: number) : void
+```
+
+Examples:
+
+```js
+// First, we import Servetify
+import Servetify from "../index.js";
+// Creating a new handler
+const handler = new Servetify(2020);
+
+// Receive any request at any route
+handler.handle("ALL *")(req => {
+    // You can aaccess the request object through the "req" variable
+    // Saves a new cookie
+    req.SetClientCookie("a cookie", "a value");
+    return Servetify.Response("Hello world");
+});
+```
+
+You can also specify the cookies at the response, but you may need to use the `Servetify.Response` method to generate a compatible response object. With a traditional `Response` object, the cookies may not be proccessed.
+
+```js
+// First, we import Servetify
+import Servetify from "../index.js";
+// Creating a new handler
+const handler = new Servetify(2020);
+
+// Receive any request at any route
+handler.handle("ALL *")(req => {
+    // You can aaccess the request object through the "req" variable
+    // Saves a new cookie
+    return Servetify.Response("Hello world", {
+        cookies:{
+            "a cookie":"a value"
+        }
+    });
+});
+```
+
+### async/await at handlers
+
+On Servetify 1.1.2, support for `async/await` was added on route handlers, this is udeful for making HTTP Requests, performing asynchronous tasks and more.
+
+Examples:
+
+```js
+// First, we import Servetify
+import Servetify from "../index.js";
+// Creating a new handler
+const handler = new Servetify(2020);
+
+// Receive any request at any route
+handler.handle("ALL *")(async req => {
+    // Await for a response
+    return await (() => {
+        // Send the response
+        return  Servetify.Response("Hello world");
+    })();
+});
+
+// Wait for the server to start listening
+await handler.start();
+// Server is listening
+console.log("Example app succesfully listening at NET Port ::"+handler.PORT+" on your local network");
+```
+Or more legible:
+
+```js
+// First, we import Servetify
+import Servetify from "../index.js";
+// Creating a new handler
+const handler = new Servetify(2020);
+
+// Receive any request at any route
+handler.handle("ALL *")(async req => {
+    // Await for a response
+    const ApiResponse = await MakeARequestToMyAPI("...");
+    return Servetify.Response(ApiResponse);
+});
+
+// Wait for the server to start listening
+await handler.start();
+// Server is listening
+console.log("Example app succesfully listening at NET Port ::"+handler.PORT+" on your local network");
+```
+
 
 ## Interact with a SQL Database
 
 Servetify applications can interact with MySQL and SQL Server Databases, to do this, the library provides the `SqlServer` and `MySQL` methods, that are used to interact with databases. We're working to interact too with PostgreSQL and MongoDB the easy way.
+
+### Verification Steps
 
 We use three security layers to interact with your databases securely. Summary:
 
@@ -258,7 +520,7 @@ We use three security layers to interact with your databases securely. Summary:
 
 **BONUS ON SECURITY FOCUS:** Servetify uses prepared queries, and does not concat values, this is a good practice to prevent SQL Code injection. However, the query usage will be shown below, if you don't use the query parameters to prepared queries, this security integration will not be useful.
 
-**Code Examples**
+### MySQL
 
 To connect a MySQL Database, you can use the `MySQL` methohd, it may receive an object containing the connect information like user, password, host and port.
 
@@ -291,6 +553,8 @@ if (!query.success) {
 console.log(query.details); // Get the query result
 ```
 
+### Query Results
+
 This example uses a parameterized query to separate the values with the query, that prevents malicious SQL code injection.
 The result of the query may change in different scenarios, here's the examples of what values can return the function
 
@@ -300,13 +564,13 @@ The result of the query may change in different scenarios, here's the examples o
 | `details` | `Object` or `string` | `"INVALID_ENTRIES"`, `"DANGER_QUERY"`, or `Object` | Indicates the query deny reason or the query results
 | `message` | `string` | `Potential malformed or malicious SQL query, to solve this error, call the function without "protection" parameter (3rd parameter)`, `The query parameter must be a string`, `Query was successful` | Provides a more detailed description about the query deny reason, or the query if was successful.
 
-**Explanation of the errors**
+### Explanation of the errors
 
 * `"INVALID_ENTRIES"`: `The query parameter must be a string`, This error appears when the query provided to the function is not a string, the query is required  to be a string in all cases.
 
 * `"DANGER_QUERY"` : `Potential malformed or malicious SQL query, to solve this error, call the function without "protection" parameter (3rd parameter)`, This error appears when the Servetify algorithm detects malicious code at the query string, to ensure your application integrity, Servetify denies the query. Is important to note that you can disable this protection step, but we don't recommend to do this, because your website may be vulnerable to attacks.
 
-**Example disabling SQL Injection Protection Algorithm**
+### Example disabling SQL Injection Protection Algorithm
 
 The only thing you need to do is set `true` as third parameter when you call the function `query`
 
@@ -342,7 +606,7 @@ console.log(query.details); // Get the query result
 
 **NOTE:** Is important to note that doing queries this way must be potentially insecure and you can be vulnerable to XSS Attacks and malicious SQL queries
 
-**Interacting with SQL Server Databases**
+### Interacting with SQL Server Databases
 
 To interact with SQL Server databases, the proccess of doing queries is the same, Servetify ensures the same security algorithm for SQL Server connections, the proccess of doing queries is totally the same, but the connection proccess variates.
 As SQL Server does not use the same authentication methods as MySQL and requires a connection string, the proccess is the different, however Servetify has made the proccess most similar possible as MySQL Connections.
@@ -379,9 +643,9 @@ if (!query.success) {
 console.log(query.details); // Get the query result
 ```
 
-**Interacting with PostgreSQL Databases**
+### Interacting with PostgreDB
 
-To interact with PostgreSQL databases, the proccess of doing queries is the same, Servetify ensures the same security algorithm for SQL Server connections, the proccess of doing queries is totally the same, but the connection proccess variates.
+To interact with PostgreDB databases, the proccess of doing queries is the same, Servetify ensures the same security algorithm for SQL Server connections, the proccess of doing queries is totally the same, but the connection proccess variates.
 As SQL Server does not use the same authentication methods as MySQL and requires a connection string, the proccess is the different, however Servetify has made the proccess most similar possible as MySQL Connections.
 
 Example of code:
@@ -417,7 +681,7 @@ console.log(query.details); // Get the query result
 
 _The functionality is the at all SQL Database Providers, you can disable the maicious SQL Detector with the 3rd parameter._
 
-**Closing connections**
+### Closing connections
 
 Is important to close the connection to the database after you have finished using the database, this is a good practice to prevent server overloading and excesive loading times. Its simpler as a line of code
 
@@ -431,8 +695,7 @@ With this line of code, the connection will be closed and the server will stop u
 
 SessionManager is a secure session storage for your web applications based in NoSQL Databases to ensure scalability on your applications. The way we perform this is identifying the user and its session by its IP address.
 
-SessionManager works with SQLite3, MongoDB and a built-in database stored at the machine memory. However, is important to note that every database works different ways, **a built-in database in memory can cause memory leaks, because data is stored at computer or VM RAM memory. In this cases, if the stored data objects are too big, the server can even get down or crash.** However, **memory databases are known because of their efficience and speed at data recovering**. 
-If you prefer to use SQLite3 is a good initiative, **SQLite3 is known because of its speed and its lower file weight on .db files, however on massive data objects, the .db file may be too big and can cause a resource missing issue.**
+SessionManager works with MongoDB and a built-in database stored at the machine memory. However, is important to note that every database works different ways, **a built-in database in memory can cause memory leaks, because data is stored at computer or VM RAM memory. In this cases, if the stored data objects are too big, the server can even get down or crash.** However, **memory databases are known because of their efficience and speed at data recovering**.
 Finally, if you would rather to use MongoDB, its a good option too. **MongoDB is a NoSQL Database known because of its speed and scalability**, however is **important to configure your production environment properly to prevent server crashes**
 
 *The decision of using any of these databases for SessionManager depends on your system limitations, we highly recommend to analyze carefully your requieremnts and system resources to prevent errors*
@@ -440,7 +703,9 @@ Finally, if you would rather to use MongoDB, its a good option too. **MongoDB is
 SessionManager uses cryptography to hash securely sessions information, so you will need to provide a secret key to hash information given to the server.
 **NOTE:** The secret key must be of 32 bytes long, if it is longer or shorter, the system will automatically fill or short the key.
 
-**1. Example of code for MongoDB:**
+> Support for SQLite3 was removed on v1.2.2 due to package outage and vulnerabilities found on the paackage that manages SQLite3 for Node.js.
+
+### Example of code for MongoDB
 
 ```js
 // First, we import Servetify
@@ -519,83 +784,7 @@ Handler.handle("GET /", async function(req) {
 })
 ```
 
-**2. Example of code for SQLite3:**
-
-```js
-// First, we import Servetify
-import Servetify from "servetify";
-
-/// ...
-// We create a handler for Servetify
-const Handler = new Servetify(2020);
-// Setup connection to the database
-const SessionManager = Handler.Authenticator({
-    // The property is not lower-upper sensitive.
-    connectionType:"SQLite",
-    // Connection details for SQLite
-    connection:{
-        // If the string does not includes the ".db" extension at the end, it will be added automatically
-        database:"my_database"
-    },
-    // The configuration for the sessions
-    sessionConfig:{
-        // Allows to limit only one session per IP
-        onlyOne:true,
-        // Time before the session expires (in seconds)
-        ttl:1000
-        // In this case, the session will expire after 1000 seconds
-    }
-}, "my_secret_key");
-// Here "my_secret_key" is going to be the key used to hash values
-// You can setup your server here
-// ...
-Handler.handle("GET /", async function(req) {
-    // Get the session
-    const session = await SessionManager.Fetch(req.ip);
-    // When you generate a session, an unique ID is assigned to the session
-    // Sessions can be found by the user IP
-    /*
-        Return value example:
-        {
-            success:true,
-            data: null,
-            error: "No session found.",
-        }
-        {
-            success:true,
-            data: {
-                "key1":"value1"
-            },
-            error: null,
-        }
-    */
-    if (!session.data) {
-        await SessionManager.New({
-            "userId":1234,
-        }, req.ip);
-        /*
-            Return structure:
-            {
-                id: "...",
-                success:true,
-                error:null
-            }
-
-            or
-
-            {
-                id: "...",
-                success:false,
-                error: "This IP owns a session already.",
-            }
-        */
-        return Servetify.Response("You don't have an open session. We've generated one for you")
-    }
-    // ...
-})
-```
-
-**2. Example of code for Cache Database:**
+### Example of code for Cache Database
 
 ```js
 // First, we import Servetify
@@ -708,54 +897,6 @@ console.log("Example app succesfully listening at NET Port ::"+handler.PORT+" on
 The method `SessionHandler.New()` returns a string that is an UUID. The UUID works as a Session ID, then the code saves the Session ID as a cookie at the Client Browser.
 
 When the function `handler.InMemorySessionManager()` is called, the `ttl` propery specifies the time (in seconds) to live before the session is destroyed. In the example above, when a new session is registered, it will be destroyed after 150 seconds.
-
-
-## Setting cookies
-
-To save cookies, Servetify offers the `req.SetClientCookie` function to save cookies at the client browser. You can also specify the cookies at the `Response` object. Both methofds do the same, developers may choose the functionality that is more legible for their needs.
-
-**Definition of the function**
-
-```ts
-function SetClientCookie(key: string, value: string, ttl: number) : void
-```
-
-Examples:
-
-```js
-// First, we import Servetify
-import Servetify from "../index.js";
-// Creating a new handler
-const handler = new Servetify(2020);
-
-// Receive any request at any route
-handler.handle("ALL *")(req => {
-    // You can aaccess the request object through the "req" variable
-    // Saves a new cookie
-    req.SetClientCookie("a cookie", "a value");
-    return Servetify.Response("Hello world");
-});
-```
-
-You can also specify the cookies at the response, but you may need to use the `Servetify.Response` method to generate a compatible response object. With a traditional `Response` object, the cookies may not be proccessed.
-
-```js
-// First, we import Servetify
-import Servetify from "../index.js";
-// Creating a new handler
-const handler = new Servetify(2020);
-
-// Receive any request at any route
-handler.handle("ALL *")(req => {
-    // You can aaccess the request object through the "req" variable
-    // Saves a new cookie
-    return Servetify.Response("Hello world", {
-        cookies:{
-            "a cookie":"a value"
-        }
-    });
-});
-```
 
 ## Crypto
 
